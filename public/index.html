@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fact Ledger — Cross-Document Knowledge Layer</title>
+<style>
+  :root {
+    --paper: #eef0ea;
+    --paper-raised: #f8f9f4;
+    --ink: #1e2b25;
+    --ink-soft: #55635a;
+    --line: #c9d0c4;
+    --line-soft: #dde2d7;
+    --accent-corroborate: #2f6f52;
+    --accent-contradict: #a33b2b;
+    --accent-reconcile: #9c7a1f;
+    --accent-related: #4a5568;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  a { color: inherit; }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    min-height: 100vh;
+  }
+
+  /* --- Sidebar --- */
+  .sidebar {
+    border-right: 1px solid var(--line);
+    padding: 24px 20px;
+    background: var(--paper-raised);
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .brand {
+    font-family: var(--serif);
+    font-size: 22px;
+    letter-spacing: -0.01em;
+  }
+  .brand small {
+    display: block;
+    font-family: var(--sans);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 3px;
+  }
+
+  .upload-box {
+    border: 1px dashed var(--line);
+    border-radius: 3px;
+    padding: 16px;
+    background: var(--paper);
+  }
+  .upload-box p { margin: 0 0 10px; font-size: 13px; color: var(--ink-soft); }
+  input[type="file"] { font-size: 13px; width: 100%; }
+  button {
+    font-family: var(--sans);
+    font-size: 13.5px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 7px 14px;
+    border-radius: 2px;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  button:hover { opacity: 0.88; }
+  button.ghost {
+    background: transparent;
+    color: var(--ink);
+  }
+  button:disabled { opacity: 0.45; cursor: default; }
+
+  .doc-list { display: flex; flex-direction: column; gap: 4px; }
+  .doc-list h4 { margin: 0 0 6px; font-size: 12px; color: var(--ink-soft); font-weight: 600; }
+  .doc-item {
+    padding: 9px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-size: 13.5px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .doc-item:hover { background: var(--paper); }
+  .doc-item.active { border-color: var(--line); background: var(--paper); }
+  .doc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .doc-status {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--ink-soft);
+    flex-shrink: 0;
+  }
+  .doc-status.done { color: var(--accent-corroborate); }
+  .doc-status.error { color: var(--accent-contradict); }
+
+  /* --- Main --- */
+  .main { padding: 30px 40px; max-width: 1080px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 22px; border-bottom: 1px solid var(--line); }
+  .tab {
+    padding: 9px 4px;
+    margin-right: 18px;
+    font-size: 14px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+
+  .filters { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .filters input, .filters select {
+    font-family: var(--sans);
+    font-size: 13px;
+    padding: 6px 9px;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: var(--paper-raised);
+    color: var(--ink);
+  }
+
+  .card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line-soft);
+    border-radius: 3px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .fact-top { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .fact-statement { font-size: 14.5px; line-height: 1.45; }
+  .fact-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+  .fact-tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .tag {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 2px 7px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--ink-soft);
+  }
+  .quote {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: var(--paper);
+    border-left: 2px solid var(--line);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    font-style: italic;
+  }
+
+  .relation-card { border-left: 3px solid var(--accent-related); }
+  .relation-card.corroborates { border-left-color: var(--accent-corroborate); }
+  .relation-card.contradicts { border-left-color: var(--accent-contradict); }
+  .relation-card.reconciled { border-left-color: var(--accent-reconcile); }
+  .relation-type-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .relation-type-label.corroborates { color: var(--accent-corroborate); }
+  .relation-type-label.contradicts { color: var(--accent-contradict); }
+  .relation-type-label.reconciled { color: var(--accent-reconcile); }
+  .relation-type-label.related { color: var(--accent-related); }
+
+  .rel-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+  .rel-fact { padding: 10px; background: var(--paper); border-radius: 3px; border: 1px solid var(--line-soft); }
+  .rel-fact .doc-tag { font-family: var(--mono); font-size: 10.5px; color: var(--ink-soft); margin-bottom: 4px; }
+  .reasoning {
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--ink);
+    background: var(--paper);
+    padding: 9px 11px;
+    border-radius: 3px;
+  }
+  .reasoning b { font-weight: 600; }
+
+  .empty { color: var(--ink-soft); font-size: 13.5px; padding: 20px 0; }
+  .section-label { font-size: 13px; color: var(--ink-soft); margin: 4px 0 14px; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">Fact Ledger<small>Cross-document facts, evidence &amp; reconciliation</small></div>
+
+    <div class="upload-box">
+      <p>Upload a PDF to extract facts and cross-check them against everything else in the ledger.</p>
+      <input type="file" id="fileInput" accept="application/pdf" />
+      <button id="uploadBtn">Upload &amp; process</button>
+    </div>
+
+    <div class="doc-list">
+      <h4>Documents</h4>
+      <div id="docList"></div>
+    </div>
+
+    <button class="ghost" id="relinkBtn" style="margin-top:auto;">Re-run relation detection</button>
+  </aside>
+
+  <main class="main">
+    <div class="tabs">
+      <div class="tab active" data-tab="facts">Facts</div>
+      <div class="tab" data-tab="relations">Relations</div>
+      <div class="tab" data-tab="failures">Extraction failures</div>
+    </div>
+
+    <div id="tab-facts">
+      <div class="filters">
+        <select id="factDocFilter"><option value="">All documents</option></select>
+        <input id="factSearch" placeholder="Search statement or quote..." />
+      </div>
+      <div id="factList"></div>
+    </div>
+
+    <div id="tab-relations" style="display:none;">
+      <div class="filters">
+        <select id="relTypeFilter">
+          <option value="">All relation types</option>
+          <option value="corroborates">Corroborates</option>
+          <option value="contradicts">Contradicts</option>
+          <option value="reconciled">Reconciled by context</option>
+          <option value="related">Related</option>
+        </select>
+      </div>
+      <div id="relationList"></div>
+    </div>
+
+    <div id="tab-failures" style="display:none;">
+      <p class="section-label">Logged whenever a chunk fails to extract cleanly, a document yields no text, or relation detection errors out — nothing here is hidden or silently retried away.</p>
+      <div id="failureList"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+const API = "";
+let documents = [];
+let activeDocId = null;
+let pollTimer = null;
+
+async function jget(url) { const r = await fetch(url); return r.json(); }
+
+function statusClass(s) {
+  if (s === "done") return "done";
+  if (s === "error") return "error";
+  return "";
+}
+
+async function loadDocuments() {
+  documents = await jget(`${API}/api/documents`);
+  const list = document.getElementById("docList");
+  const select = document.getElementById("factDocFilter");
+  list.innerHTML = "";
+  select.innerHTML = `<option value="">All documents</option>`;
+
+  if (documents.length === 0) {
+    list.innerHTML = `<div class="empty">No documents yet.</div>`;
+  }
+
+  for (const d of documents) {
+    const item = document.createElement("div");
+    item.className = "doc-item" + (d.id === activeDocId ? " active" : "");
+    item.innerHTML = `<span class="doc-name">${escapeHtml(d.original_name)}</span><span class="doc-status ${statusClass(d.status)}">${d.status}</span>`;
+    item.onclick = () => { activeDocId = d.id; loadDocuments(); loadFacts(); };
+    list.appendChild(item);
+
+    const opt = document.createElement("option");
+    opt.value = d.id;
+    opt.textContent = d.original_name;
+    select.appendChild(opt);
+  }
+
+  const anyInFlight = documents.some((d) => d.status === "pending" || d.status === "extracting" || d.status === "linking");
+  if (anyInFlight && !pollTimer) {
+    pollTimer = setInterval(async () => {
+      await loadDocuments();
+      await loadFacts();
+      await loadRelations();
+      const stillInFlight = documents.some((d) => d.status === "pending" || d.status === "extracting" || d.status === "linking");
+      if (!stillInFlight) { clearInterval(pollTimer); pollTimer = null; }
+    }, 3000);
+  }
+}
+
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function loadFacts() {
+  const docId = document.getElementById("factDocFilter").value;
+  const q = document.getElementById("factSearch").value;
+  const params = new URLSearchParams();
+  if (docId) params.set("document_id", docId);
+  if (q) params.set("q", q);
+  const facts = await jget(`${API}/api/facts?${params}`);
+  const container = document.getElementById("factList");
+  container.innerHTML = "";
+  if (facts.length === 0) {
+    container.innerHTML = `<div class="empty">No facts yet — upload a PDF, or wait for processing to finish.</div>`;
+    return;
+  }
+  for (const f of facts) {
+    const doc = documents.find((d) => d.id === f.document_id);
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="fact-top">
+        <div class="fact-statement">${escapeHtml(f.statement)}</div>
+        <div class="fact-meta">p.${f.page} · ${escapeHtml(doc ? doc.original_name : "doc " + f.document_id)}</div>
+      </div>
+      <div class="fact-tags">
+        <span class="tag">${escapeHtml(f.entity)}</span>
+        <span class="tag">${escapeHtml(f.metric)}</span>
+        ${f.value ? `<span class="tag">${escapeHtml(f.value)}${f.unit ? " " + escapeHtml(f.unit) : ""}</span>` : ""}
+        ${f.period ? `<span class="tag">${escapeHtml(f.period)}</span>` : ""}
+        <span class="tag">${escapeHtml(f.confidence)} confidence</span>
+      </div>
+      <div class="quote">&ldquo;${escapeHtml(f.quote)}&rdquo;</div>
+    `;
+    container.appendChild(card);
+  }
+}
+
+async function loadRelations() {
+  const type = document.getElementById("relTypeFilter").value;
+  const params = new URLSearchParams();
+  if (type) params.set("relation_type", type);
+  const rels = await jget(`${API}/api/relations?${params}`);
+  const container = document.getElementById("relationList");
+  container.innerHTML = "";
+  if (rels.length === 0) {
+    container.innerHTML = `<div class="empty">No relations detected yet. Relations appear once two or more documents share a comparable fact.</div>`;
+    return;
+  }
+  for (const r of rels) {
+    const card = document.createElement("div");
+    card.className = `card relation-card ${r.relation_type}`;
+    card.innerHTML = `
+      <span class="relation-type-label ${r.relation_type}">${r.relation_type.toUpperCase()}</span>
+      <div class="rel-pair">
+        <div class="rel-fact">
+          <div class="doc-tag">${escapeHtml(r.fact_a_doc_name)} · p.${r.fact_a_page}</div>
+          <div>${escapeHtml(r.fact_a_statement)}</div>
+          <div class="quote">&ldquo;${escapeHtml(r.fact_a_quote)}&rdquo;</div>
+        </div>
+        <div class="rel-fact">
+          <div class="doc-tag">${escapeHtml(r.fact_b_doc_name)} · p.${r.fact_b_page}</div>
+          <div>${escapeHtml(r.fact_b_statement)}</div>
+          <div class="quote">&ldquo;${escapeHtml(r.fact_b_quote)}&rdquo;</div>
+        </div>
+      </div>
+      <div class="reasoning"><b>Reasoning:</b> ${escapeHtml(r.reasoning)}</div>
+    `;
+    container.appendChild(card);
+  }
+}
+
+async function loadFailures() {
+  const failures = await jget(`${API}/api/failures`);
+  const container = document.getElementById("failureList");
+  container.innerHTML = "";
+  if (failures.length === 0) {
+    container.innerHTML = `<div class="empty">No failures logged.</div>`;
+    return;
+  }
+  for (const f of failures) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="fact-meta">${new Date(f.created_at + "Z").toLocaleString()} · stage: ${escapeHtml(f.stage)}${f.document_id ? " · doc " + f.document_id : ""}</div>
+      <div style="margin-top:6px;">${escapeHtml(f.description)}</div>
+    `;
+    container.appendChild(card);
+  }
+}
+
+// --- Tabs ---
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.onclick = () => {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    tab.classList.add("active");
+    ["facts", "relations", "failures"].forEach((name) => {
+      document.getElementById(`tab-${name}`).style.display = name === tab.dataset.tab ? "block" : "none";
+    });
+    if (tab.dataset.tab === "relations") loadRelations();
+    if (tab.dataset.tab === "failures") loadFailures();
+  };
+});
+
+// --- Filters ---
+document.getElementById("factDocFilter").onchange = loadFacts;
+document.getElementById("factSearch").oninput = debounce(loadFacts, 300);
+document.getElementById("relTypeFilter").onchange = loadRelations;
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// --- Upload ---
+document.getElementById("uploadBtn").onclick = async () => {
+  const input = document.getElementById("fileInput");
+  if (!input.files[0]) return alert("Choose a PDF first.");
+  const btn = document.getElementById("uploadBtn");
+  btn.disabled = true;
+  btn.textContent = "Uploading...";
+  const fd = new FormData();
+  fd.append("file", input.files[0]);
+  try {
+    const r = await fetch(`${API}/api/documents`, { method: "POST", body: fd });
+    if (!r.ok) throw new Error((await r.json()).error || "Upload failed");
+    input.value = "";
+    await loadDocuments();
+  } catch (err) {
+    alert("Upload failed: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Upload & process";
+  }
+};
+
+document.getElementById("relinkBtn").onclick = async () => {
+  await fetch(`${API}/api/relink`, { method: "POST" });
+  alert("Relation detection re-running in the background. Refresh the Relations tab shortly.");
+};
+
+// --- Init ---
+loadDocuments();
+loadFacts();
+</script>
+</body>
+</html>
